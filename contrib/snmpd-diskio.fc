@@ -1,0 +1,4 @@
+/usr/sbin/snmpd-diskio		gen_context(system_u:object_r:snmpd_diskio_exec_t,s0)
+/usr/libexec/snmpd-diskio-cache	gen_context(system_u:object_r:snmpd_diskio_cache_exec_t,s0)
+/etc/snmp/diskio.conf		gen_context(system_u:object_r:snmpd_diskio_conf_file_t,s0)
+/var/run/snmpd-diskio(/.*)?	gen_context(system_u:object_r:snmpd_diskio_cache_file_t,s0)

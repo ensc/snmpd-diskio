@@ -1,0 +1,66 @@
+policy_module(snmpd-diskio,1.0.0)
+
+require {
+        type snmpd_t;
+        type svirt_image_t;
+        class blk_file getattr;
+}
+
+type snmpd_diskio_t;
+type snmpd_diskio_exec_t;
+
+type snmpd_diskio_cache_t;
+type snmpd_diskio_cache_exec_t;
+
+type snmpd_diskio_conf_file_t;
+type snmpd_diskio_cache_file_t;
+
+domain_type(snmpd_diskio_t);
+domain_type(snmpd_diskio_cache_t);
+
+domain_entry_file(snmpd_diskio_t, snmpd_diskio_exec_t);
+domain_entry_file(snmpd_diskio_cache_t, snmpd_diskio_cache_exec_t);
+
+files_type(snmpd_diskio_conf_file_t);
+files_type(snmpd_diskio_cache_file_t);
+
+libs_use_shared_libs(snmpd_diskio_t);
+libs_use_ld_so(snmpd_diskio_t);
+
+libs_use_shared_libs(snmpd_diskio_cache_t);
+libs_use_ld_so(snmpd_diskio_cache_t);
+
+
+role system_r types snmpd_diskio_t;
+role system_r types snmpd_diskio_cache_t;
+
+domtrans_pattern(snmpd_t, snmpd_diskio_exec_t, snmpd_diskio_t);
+domtrans_pattern(snmpd_diskio_t, snmpd_diskio_cache_exec_t, snmpd_diskio_cache_t);
+
+
+#============= snmpd_diskio_cache_t ==============
+allow snmpd_diskio_cache_t snmpd_diskio_conf_file_t:file { read getattr };
+allow snmpd_diskio_cache_t snmpd_diskio_cache_file_t:file { write getattr };
+allow snmpd_diskio_cache_t snmpd_t:fifo_file { read write };
+
+allow snmpd_diskio_cache_t svirt_image_t:blk_file getattr;
+
+allow snmpd_diskio_cache_t sysfs_t:lnk_file { getattr read };
+allow snmpd_diskio_cache_t sysfs_t:file { getattr read };
+
+miscfiles_read_localization(snmpd_diskio_cache_t)
+storage_getattr_fixed_disk_dev(snmpd_diskio_cache_t)
+dev_search_sysfs(snmpd_diskio_cache_t)
+
+dontaudit snmpd_diskio_cache_t snmpd_diskio_cache_file_t:file read;
+dontaudit snmpd_diskio_cache_t fixed_disk_device_t:blk_file { read open };
+
+
+#============= snmpd_diskio_t ==============
+allow snmpd_diskio_t	   snmpd_diskio_conf_file_t:file { open read lock getattr };
+allow snmpd_diskio_t	   snmpd_diskio_cache_file_t:file { open create read write lock getattr };
+allow snmpd_diskio_t	   snmpd_diskio_cache_file_t:dir { search write add_name };
+
+miscfiles_read_localization(snmpd_diskio_t)
+dev_search_sysfs(snmpd_diskio_t)
+dev_read_sysfs(snmpd_diskio_t)
