@@ -12,6 +12,7 @@ INSTALL =		install
 INSTALL_BIN =		$(INSTALL) -p -m 0755
 MKDIR_P =		$(INSTALL) -d
 
+DIET_CC =		$(CC)
 CFLAGS = \
 	-Wall -W -Wno-unused-parameter \
 	-D_FORTIFY_SOURCE=2 -fstack-protector \
@@ -57,6 +58,7 @@ dist:	$(addprefix snmpd-diskio-$(VERSION).tar.,xz bz2)
 snmpd-diskio-$(VERSION).tar:	.git/objects
 	git archive --format=tar --prefix=snmpd-diskio-$(VERSION)/ -o $@ HEAD
 
+snmpd-diskio:		CC = $(DIET_CC)
 snmpd-diskio:		src/snmpd-diskio.c src/config.h
 snmpd-diskio-cache:	src/snmpd-diskio-cache.c src/config.h
 
