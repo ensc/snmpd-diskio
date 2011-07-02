@@ -58,7 +58,7 @@ dist:	$(addprefix snmpd-diskio-$(VERSION).tar.,xz bz2)
 snmpd-diskio-$(VERSION).tar:	.git/objects
 	git archive --format=tar --prefix=snmpd-diskio-$(VERSION)/ -o $@ HEAD
 
-snmpd-diskio:		CC = $(DIET_CC)
+snmpd-diskio:		CC := $(DIET_CC)
 snmpd-diskio:		src/snmpd-diskio.c src/config.h
 snmpd-diskio-cache:	src/snmpd-diskio-cache.c src/config.h
 
