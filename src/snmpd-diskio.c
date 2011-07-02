@@ -34,7 +34,8 @@
 #include <sys/fcntl.h>
 #include <sys/wait.h>
 
-#define BASE_OID	".1.3.6.1.4.1.22683.1."
+#define BASE_OID	".1.3.6.1.4.1.22683.1"
+#define ARRAY_SIZE(_a)	(sizeof(_a) / sizeof (_a)[0])
 
 enum {
 	CMD_HELP = 0x1000,
@@ -336,8 +337,16 @@ static int consume_delim(char const **ptr, char delim)
 	return rc;
 }
 
-static int read_cache_file(int fd,
-			   struct cache_entry **cache_entries, size_t *num_cache_entries)
+static int cache_entry_cmp(void const *a_v, void const *b_v)
+{
+	struct cache_entry const	*a = a_v;
+	struct cache_entry const	*b = b_v;
+
+	return (signed int)a->idx - (signed int)b->idx;
+}
+
+static int read_cache_file(int fd, struct cache_entry **cache_entries,
+			   size_t *num_cache_entries)
 {
 	struct stat	st;
 	int		rc;
@@ -455,6 +464,10 @@ static int read_cache_file(int fd,
 
 	munmap((void *)cfg, st.st_size);
 
+	qsort(*cache_entries, *num_cache_entries, sizeof (*cache_entries)[0],
+	      cache_entry_cmp);
+
+
 	return 0;
 
 err:
@@ -466,31 +479,71 @@ err:
 	return rc;
 }
 
-static int cache_entry_cmp(void const *a_v, void const *b_v)
-{
-	struct cache_entry const	*a = a_v;
-	struct cache_entry const	*b = b_v;
+struct oid_info {
+	unsigned int	oid;
+	unsigned int	idx;
+} const		SUB_OIDS[] = {
+	{  1, ~0u },
+	{ 10,  0 },
+	{ 11,  1 },
+	{ 12,  2 },
+	{ 13,  3 },
+	{ 20,  4 },
+	{ 21,  5 },
+	{ 22,  6 },
+	{ 23,  7 },
+	{ 30,  8 },
+	{ 31,  9 },
+	{ 32, 10 },
+	{  0,  0 },			/* sentinel for get-next operation */
+};
 
-	return (signed int)a->idx - (signed int)b->idx;
+static int oid_entry_search_cmp(void const *a_v, void const *b_v)
+{
+	unsigned int const	*a = a_v;
+	struct oid_info const	*b = b_v;
+
+	return *a - b->oid;
 }
 
 static bool parse_oid(char const *str,
-		      unsigned int *suboid,
+		      struct oid_info const **oid_info,
 		      unsigned int *idx)
 {
-	char		*err_ptr;
+	unsigned int		suboid;
+	struct oid_info const	*oid;
 
-	*suboid = strtoul(str, &err_ptr, 10);
-	if (*err_ptr == '\0')
+	if (*str == '.') {
+		char			*err_ptr;
+
+		suboid = strtoul(str+1, &err_ptr, 10);
+		if (*err_ptr == '\0')
+			*idx = ~0u;
+		else if (*err_ptr == '.')
+			*idx = strtoul(err_ptr + 1, &err_ptr, 10);
+
+		if (*err_ptr != '\0') {
+			fprintf(stderr, "unsupported suboid '%s'\n", str);
+			return false;
+		}
+
+		oid = bsearch(&suboid, &SUB_OIDS[0],
+			      ARRAY_SIZE(SUB_OIDS) - 1, sizeof SUB_OIDS[0],
+			      &oid_entry_search_cmp);
+
+		if (!oid) {
+			fprintf(stderr, "unrecognized suboid '%s'\n", str);
+			return false;
+		}
+	} else if (*str == '\0') {
+		oid = NULL;
 		*idx = ~0u;
-	else if (*err_ptr == '.')
-		*idx = strtoul(err_ptr + 1, &err_ptr, 10);
-
-	if (!str[0] || *err_ptr != '\0') {
-		fprintf(stderr, "unsupported suboid '%s'\n", str);
+	} else {
+		fprintf(stderr, "invalid suboid '%s'\n", str);
 		return false;
 	}
 
+	*oid_info = oid;
 	return true;
 }
 
@@ -527,19 +580,19 @@ err:
 }
 
 static void print_cache(struct cache_entry const *entry,
-			char const *base_oid, unsigned int sub_oid,
-			size_t idx)
+			char const *base_oid,
+			struct oid_info const *oid_info)
 {
 	if (entry->have_stats) {
-		printf("%s%u.%u\n", base_oid, sub_oid, entry->idx);
+		printf("%s.%u.%u\n", base_oid, oid_info->oid, entry->idx);
 
-		if (idx == ~0u)
+		if (oid_info->idx == ~0u)
 			printf("string\n%s\n", entry->alias);
-		else if (idx >= sizeof entry->stats / sizeof entry->stats[0])
+		else if (oid_info->idx >= ARRAY_SIZE(entry->stats))
 			abort();
 		else
 			printf("counter\n%lu\n",
-			       entry->stats[idx] & 0xffffffffu);
+			       entry->stats[oid_info->idx] & 0xffffffffu);
 	}
 }
 
@@ -557,10 +610,10 @@ int main(int argc, char *argv[])
 	struct cache_entry		*cache_entries;
 	size_t				num_cache_entries;
 	int				rc;
-	unsigned int			sub_oid_code = ~0u;
-	unsigned int			oid_idx = ~0u;
+	unsigned int			attr_idx = ~0u;
 	size_t				req_cache_idx;
-	size_t				stat_idx;
+	struct oid_info const		*sub_oid;
+	size_t				base_oid_len;
 
 	while (1) {
 		int		c = getopt_long(argc, argv, "gns", CMDLINE_OPTIONS, 0);
@@ -583,18 +636,22 @@ int main(int argc, char *argv[])
 	}
 
 	is_ok = false;
+	base_oid_len = strlen(opts.base_oid);
+
 	if (opts.op_get + opts.op_set + opts.op_get_next > 1)
 		fputs("more than one operation specified\n", stderr);
 	else if (opts.op_get + opts.op_set + opts.op_get_next == 0)
 		fputs("no operation specified\n", stderr);
 	else if (optind + 1 != argc)
 		fputs("no/too much OID specified\n", stderr);
-	else if (strncmp(opts.base_oid, argv[optind], strlen(opts.base_oid)))
+	else if (strncmp(opts.base_oid, argv[optind], base_oid_len) &&
+		 argv[optind][base_oid_len] != '\0' &&
+		 argv[optind][base_oid_len] != '.')
 		fputs("unsupported OID\n", stderr);
-	else if (!parse_oid(&argv[optind][strlen(opts.base_oid)],
-			    &sub_oid_code, &oid_idx))
+	else if (!parse_oid(&argv[optind][base_oid_len], &sub_oid, &attr_idx))
 		;			/* noop */
-	else if ((opts.op_get || opts.op_set) && oid_idx == ~0u)
+	else if ((opts.op_get || opts.op_set) &&
+		 (attr_idx == ~0u || sub_oid == NULL))
 		;			/* noop */
 	else
 		is_ok = true;
@@ -602,32 +659,13 @@ int main(int argc, char *argv[])
 	if (!is_ok)
 		exit(EX_USAGE);
 
-	if (sub_oid_code == 1)
-		stat_idx = ~0u;
-	else if (sub_oid_code < 10)
-		is_ok = false;
-	else if (sub_oid_code < 14)
-		stat_idx = sub_oid_code - 10;
-	else if (sub_oid_code < 20)
-		is_ok = false;
-	else if (sub_oid_code < 24)
-		stat_idx = sub_oid_code - 20 + 4;
-	else if (sub_oid_code < 30)
-		is_ok = false;
-	else if (sub_oid_code < 33)
-		stat_idx = sub_oid_code - 30 + 8;
-	else
-		is_ok = false;
-
-	if (!is_ok) {
-		fputs("unrecognized suboid\n", stderr);
-		exit(EX_USAGE);
-	}
-
 	if (opts.op_set) {
 		puts("not-writable");
 		return EXIT_SUCCESS;
 	}
+
+	if (opts.op_get_next && sub_oid == NULL)
+		sub_oid = &SUB_OIDS[0];
 
 	cache_fd = open_cache_file(opts.conf_file, opts.cache_file, opts.cache_prog);
 	if (cache_fd < 0)
@@ -639,35 +677,38 @@ int main(int argc, char *argv[])
 
 	close(cache_fd);
 
-	qsort(cache_entries, num_cache_entries, sizeof cache_entries[0],
-	      cache_entry_cmp);
-
 	req_cache_idx = num_cache_entries;
-	if (oid_idx == ~0u && opts.op_get_next)
+	if (attr_idx == ~0u && opts.op_get_next)
 		req_cache_idx = 0;
-	if (oid_idx != ~0u) {
+	if (attr_idx != ~0u) {
 		size_t				i;
 
 		for (i = 0; i < num_cache_entries; ++i) {
-			if (cache_entries[i].idx != oid_idx)
+			if (cache_entries[i].idx != attr_idx)
 				continue;
 
 			req_cache_idx = i;
-			if (opts.op_get_next)
+			if (opts.op_get_next) {
 				++req_cache_idx;
+
+				if (req_cache_idx >= num_cache_entries) {
+					req_cache_idx = 0;
+					++sub_oid;
+				}
+			}
 
 			break;
 		}
 	} else if (opts.op_get_next)
 		req_cache_idx = 0;
 
-	if (req_cache_idx < num_cache_entries) {
+	if (req_cache_idx < num_cache_entries && sub_oid->oid != 0) {
 		rc = read_sysfs_cache(&cache_entries[req_cache_idx]);
 		if (rc < 0)
 			exit(-rc);
 
 		print_cache(&cache_entries[req_cache_idx],
-			    opts.base_oid, sub_oid_code, stat_idx);
+			    opts.base_oid, sub_oid);
 	}
 
 
