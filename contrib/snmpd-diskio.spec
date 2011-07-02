@@ -10,9 +10,9 @@
 %{!?release_func:%global release_func() %1%{?dist}}
 
 Name:		snmpd-diskio
-Version:	0.2.1
-Release:	%release_func 2
-Summary:	snmpd diskio pluging
+Version:	0.2.2
+Release:	%release_func 1
+Summary:	snmpd diskio plugin
 
 License:	GPLv3
 Group:		System Environment/Base
