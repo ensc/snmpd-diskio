@@ -28,8 +28,8 @@ configuration file could look like
 
 
   # identifier            alias   idx
-  UUID="559900ff-79fa-49a7-8c0f-f37e5b04e747"     sda2    0
-  LABEL="/"               sda1     1
+  UUID="559900ff-79fa-49a7-8c0f-f37e5b04e747"     sda2    1
+  LABEL="/"               sda1     2
   /dev/sda5               "sda5"  10
   /dev/vg00/usr-share     xxxx    20
 
