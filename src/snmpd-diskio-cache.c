@@ -130,8 +130,8 @@ int main(int argc, char *argv[])
 			tag = "UUID";
 			ptr += 5;
 		} else if (strncmp(ptr, "LABEL=", 5) == 0) {
-			tag = "UUID";
-			ptr += 7;
+			tag = "LABEL";
+			ptr += 6;
 		} else {
 			tag = NULL;
 		}
