@@ -1,4 +1,4 @@
-VERSION =	0.2.3
+VERSION =	0.2.4
 
 prefix =		/usr/local
 bin_dir =		$(prefix)/bin
@@ -31,7 +31,7 @@ sbin_PROGRAMS =		snmpd-diskio
 libexec_PROGRAMS =	snmpd-diskio-cache
 
 BLKID_CFLAGS =		$(shell $(PKG_CONFIG) --cflags blkid)
-BLKID_LIBS =		$(shell $(PKG_CONFIG) --libs blkid)
+BLKID_LIBS =		-Wl,-as-needed $(shell $(PKG_CONFIG) --libs blkid)
 BLKID1_CPPFLAGS =	$(shell $(PKG_CONFIG) --atleast-version=2 blkid || echo "-DHAVE_LIBBLKID1=1")
 
 all:	$(sbin_PROGRAMS) $(libexec_PROGRAMS)
