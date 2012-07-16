@@ -91,7 +91,8 @@ int main(int argc, char *argv[])
 	if (argc != 3)
 		exit(EX_USAGE);
 
-	memset(&blkid_cache, 0, sizeof blkid_cache);
+	if (blkid_get_cache(&blkid_cache, NULL) < 0)
+		blkid_cache = NULL;
 
 	fd_conf = atoi(argv[1]);
 	fd_cache = atoi(argv[2]);
@@ -223,6 +224,7 @@ int main(int argc, char *argv[])
 
 	free(line);
 	fclose(cfg_file);
+	blkid_put_cache(blkid_cache);
 
 	return 0;
 }
