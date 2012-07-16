@@ -32,6 +32,14 @@
 
 #include <blkid/blkid.h>
 
+#ifdef HAVE_LIBBLKID1
+static char *blkid_evaluate_tag(char const *tag, char const *value,
+				blkid_cache *blcache)
+{
+	return blkid_get_devname(*blcache, tag, value);
+}
+#endif
+
 static char *read_quoted_string(char **ptr, unsigned int line_num)
 {
 	bool	is_quoted = false;

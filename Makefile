@@ -25,12 +25,14 @@ AM_CPPFLAGS = \
 	-DSYSCONFDIR=\"$(sysconf_dir)\" \
 	-DLIBEXECDIR=\"$(libexec_dir)\" \
 	-DLOCALSTATEDIR=\"$(localstate_dir)\" \
+	$(BLKID1_CPPFLAGS)
 
 sbin_PROGRAMS =		snmpd-diskio
 libexec_PROGRAMS =	snmpd-diskio-cache
 
 BLKID_CFLAGS =		$(shell $(PKG_CONFIG) --cflags blkid)
 BLKID_LIBS =		$(shell $(PKG_CONFIG) --libs blkid)
+BLKID1_CPPFLAGS =	$(shell $(PKG_CONFIG) --atleast-version=2 blkid || echo "-DHAVE_LIBBLKID1=1")
 
 all:	$(sbin_PROGRAMS) $(libexec_PROGRAMS)
 
