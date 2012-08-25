@@ -1,9 +1,11 @@
 policy_module(snmpd-diskio,1.0.0)
 
 require {
-        type snmpd_t;
-        type svirt_image_t;
-        class blk_file getattr;
+	type snmpd_t;
+	type svirt_image_t;
+	type etc_runtime_t;
+	class blk_file { getattr open };
+	class file { open };
 }
 
 type snmpd_diskio_t;
@@ -39,11 +41,12 @@ domtrans_pattern(snmpd_diskio_t, snmpd_diskio_cache_exec_t, snmpd_diskio_cache_t
 
 
 #============= snmpd_diskio_cache_t ==============
+files_read_etc_runtime_files(snmpd_diskio_cache_t);
+allow snmpd_diskio_cache_t etc_runtime_t:dir search;
+
 allow snmpd_diskio_cache_t snmpd_diskio_conf_file_t:file { read getattr };
 allow snmpd_diskio_cache_t snmpd_diskio_cache_file_t:file { write getattr };
 allow snmpd_diskio_cache_t snmpd_t:fifo_file { read write };
-
-allow snmpd_diskio_cache_t svirt_image_t:blk_file getattr;
 
 allow snmpd_diskio_cache_t sysfs_t:lnk_file { getattr read };
 allow snmpd_diskio_cache_t sysfs_t:file { getattr read };
@@ -54,7 +57,7 @@ dev_search_sysfs(snmpd_diskio_cache_t)
 
 dontaudit snmpd_diskio_cache_t snmpd_diskio_cache_file_t:file read;
 dontaudit snmpd_diskio_cache_t fixed_disk_device_t:blk_file { read open };
-
+dontaudit snmpd_diskio_cache_t svirt_image_t:blk_file getattr;
 
 #============= snmpd_diskio_t ==============
 allow snmpd_diskio_t	   snmpd_diskio_conf_file_t:file { open read lock getattr };
