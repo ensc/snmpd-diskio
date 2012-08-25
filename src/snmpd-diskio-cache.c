@@ -28,9 +28,16 @@
 #include <string.h>
 #include <unistd.h>
 #include <time.h>
+#include <errno.h>
 #include <sys/stat.h>
+#include <sys/param.h>
 
 #include <blkid/blkid.h>
+
+#ifndef PATH_MAX
+#  warning "PATH_MAX not defined; assuming 4096"
+#  define PATH_MAX	4096
+#endif
 
 #ifdef HAVE_LIBBLKID1
 static char *blkid_evaluate_tag(char const *tag, char const *value,
@@ -39,6 +46,21 @@ static char *blkid_evaluate_tag(char const *tag, char const *value,
 	return blkid_get_devname(*blcache, tag, value);
 }
 #endif
+
+static char *realpath_x(char const *path, bool relaxed)
+{
+	char	buf[PATH_MAX+1];
+	char	*res = realpath(path, relaxed ? buf : NULL);
+	
+	if (!relaxed)
+		;			/* noop */
+	else if (res)
+		res = strdup(res);
+	else
+		res = strdup(buf);
+
+	return res;
+}
 
 static char *read_quoted_string(char **ptr, unsigned int line_num)
 {
@@ -115,6 +137,7 @@ int main(int argc, char *argv[])
 		unsigned int	dev_idx;
 		struct stat	st;
 		char		sysfs_path[4096];
+		bool		relax_check = false;
 
 		if (l < 0)
 			break;
@@ -129,6 +152,12 @@ int main(int argc, char *argv[])
 
 		if (*ptr == '#')
 			continue;
+
+		if (*ptr == '-') {
+			relax_check = true;
+			++ptr;
+			--l;
+		}
 
 		while (l > 0 && isspace(line[l-1]))
 			--l;
@@ -182,15 +211,22 @@ int main(int argc, char *argv[])
 		if (tag) {
 			dev_name = blkid_evaluate_tag(tag, value, &blkid_cache);
 		} else {
-			dev_name = realpath(value, NULL);
+			dev_name = realpath_x(value, relax_check);
 		}
 
 		if (!dev_name)
 			continue;
 
-		if (stat(dev_name, &st) < 0) {
+		if (stat(dev_name, &st) >= 0)
+			;		/* noop */
+		else if (relax_check && errno == EACCES)
+			/* make sure main program does not rely on
+			 * these values */
+			memset(&st, 0, sizeof st);
+		else {
 			fprintf(stderr, ":%u failed to stat '%s': %m\n",
 				line_num, dev_name);
+			free(dev_name);
 			exit(EX_IOERR);
 		}
 

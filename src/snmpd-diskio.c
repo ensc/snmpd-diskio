@@ -263,8 +263,6 @@ err:
 typedef unsigned long	stat_entries[11];
 
 struct cache_entry {
-	unsigned int	maj;
-	unsigned int	min;
 	char const	*alias;
 	char const	*sysfs;
 	unsigned int	idx;
@@ -408,6 +406,8 @@ static int read_cache_file(int fd, struct cache_entry **cache_entries,
 			in_comment = true;
 			++ptr;
 		} else {
+			unsigned int		dummy;
+
 			switch (state) {
 			case ST_MAJOR:
 				entry = &(*cache_entries)[*num_cache_entries];
@@ -419,11 +419,11 @@ static int read_cache_file(int fd, struct cache_entry **cache_entries,
 					goto err;
 				}
 
-				rc = consume_uint(&entry->maj, &ptr, "major");
+				rc = consume_uint(&dummy, &ptr, "major");
 				break;
 
 			case ST_MINOR:
-				rc = consume_uint(&entry->min, &ptr, "minor");
+				rc = consume_uint(&dummy, &ptr, "minor");
 				break;
 
 			case ST_IDX:
