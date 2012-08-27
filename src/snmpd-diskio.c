@@ -483,6 +483,7 @@ struct oid_info {
 	unsigned int	oid;
 	unsigned int	idx;
 } const		SUB_OIDS[] = {
+	{  0, ~2u },
 	{  1, ~0u },
 	{  2, ~1u },
 	{ 10,  0 },
@@ -654,8 +655,8 @@ int main(int argc, char *argv[])
 	else if (!parse_oid(&argv[optind][base_oid_len], &sub_oid, &attr_idx))
 		;			/* noop */
 	else if ((opts.op_get || opts.op_set) &&
-		 (attr_idx == ~0u || sub_oid == NULL))
-		;			/* noop */
+		 (sub_oid == NULL || (attr_idx == ~0u && sub_oid != &SUB_OIDS[0])))
+		fputs("unknown OID\n", stderr);
 	else
 		is_ok = true;
 
@@ -667,8 +668,11 @@ int main(int argc, char *argv[])
 		return EXIT_SUCCESS;
 	}
 
-	if (opts.op_get_next && sub_oid == NULL)
+	if (sub_oid == NULL) {
 		sub_oid = &SUB_OIDS[0];
+		attr_idx = 0;
+	} else if (sub_oid == &SUB_OIDS[0])
+		attr_idx = ~0u;
 
 	cache_fd = open_cache_file(opts.conf_file, opts.cache_file, opts.cache_prog);
 	if (cache_fd < 0)
@@ -683,7 +687,7 @@ int main(int argc, char *argv[])
 	req_cache_idx = num_cache_entries;
 	if (attr_idx == ~0u && opts.op_get_next)
 		req_cache_idx = 0;
-	if (attr_idx != ~0u) {
+	if (sub_oid != &SUB_OIDS[0] && attr_idx != ~0u) {
 		size_t				i;
 
 		for (i = 0; i < num_cache_entries; ++i) {
@@ -702,10 +706,17 @@ int main(int argc, char *argv[])
 
 			break;
 		}
-	} else if (opts.op_get_next)
-		req_cache_idx = 0;
+	} else if (opts.op_get_next && attr_idx == ~0u) {
+		if (sub_oid == &SUB_OIDS[0])
+			++sub_oid;
 
-	if (req_cache_idx < num_cache_entries && sub_oid->oid != 0) {
+		req_cache_idx = 0;
+	}
+
+	if (sub_oid->idx == ~2u) {
+		printf("%s.%u\ninteger\n%zu\n", opts.base_oid, sub_oid->oid,
+		       num_cache_entries);
+	} else if (req_cache_idx < num_cache_entries && sub_oid->oid != 0) {
 		rc = read_sysfs_cache(&cache_entries[req_cache_idx]);
 		if (rc < 0)
 			exit(-rc);
