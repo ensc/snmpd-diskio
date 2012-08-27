@@ -484,6 +484,7 @@ struct oid_info {
 	unsigned int	idx;
 } const		SUB_OIDS[] = {
 	{  1, ~0u },
+	{  2, ~1u },
 	{ 10,  0 },
 	{ 11,  1 },
 	{ 12,  2 },
@@ -588,6 +589,8 @@ static void print_cache(struct cache_entry const *entry,
 
 		if (oid_info->idx == ~0u)
 			printf("string\n%s\n", entry->alias);
+		else if (oid_info->idx == ~1u)
+			printf("integer\n%u\n", entry->idx);
 		else if (oid_info->idx >= ARRAY_SIZE(entry->stats))
 			abort();
 		else
