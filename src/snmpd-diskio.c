@@ -28,6 +28,7 @@
 #include <sysexits.h>
 #include <getopt.h>
 #include <unistd.h>
+#include <assert.h>
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
@@ -479,13 +480,20 @@ err:
 	return rc;
 }
 
+#define SNMPD_OID_METADATA	(~1u)
+#define SNMPD_OID_NAMES		(~2u)
+#define SNMPD_OID_INDIZES	(~3u)
+
+#define SNMPD_IDX_UNKNOWN	(~10u)
+
 struct oid_info {
 	unsigned int	oid;
 	unsigned int	idx;
+	unsigned int	num_suboid;
 } const		SUB_OIDS[] = {
-	{  0, ~2u },
-	{  1, ~0u },
-	{  2, ~1u },
+	{  0, SNMPD_OID_METADATA, 1 },
+	{  1, SNMPD_OID_NAMES },
+	{  2, SNMPD_OID_INDIZES },
 	{ 10,  0 },
 	{ 11,  1 },
 	{ 12,  2 },
@@ -520,7 +528,7 @@ static bool parse_oid(char const *str,
 
 		suboid = strtoul(str+1, &err_ptr, 10);
 		if (*err_ptr == '\0')
-			*idx = ~0u;
+			*idx = SNMPD_IDX_UNKNOWN;
 		else if (*err_ptr == '.')
 			*idx = strtoul(err_ptr + 1, &err_ptr, 10);
 
@@ -539,7 +547,7 @@ static bool parse_oid(char const *str,
 		}
 	} else if (*str == '\0') {
 		oid = NULL;
-		*idx = ~0u;
+		*idx = SNMPD_IDX_UNKNOWN;
 	} else {
 		fprintf(stderr, "invalid suboid '%s'\n", str);
 		return false;
@@ -588,16 +596,42 @@ static void print_cache(struct cache_entry const *entry,
 	if (entry->have_stats) {
 		printf("%s.%u.%u\n", base_oid, oid_info->oid, entry->idx);
 
-		if (oid_info->idx == ~0u)
+		switch (oid_info->idx) {
+		case SNMPD_OID_NAMES:
 			printf("string\n%s\n", entry->alias);
-		else if (oid_info->idx == ~1u)
+			break;
+
+		case SNMPD_OID_INDIZES:
 			printf("integer\n%u\n", entry->idx);
-		else if (oid_info->idx >= ARRAY_SIZE(entry->stats))
-			abort();
-		else
+			break;
+
+		default:
+			if (oid_info->idx >= ARRAY_SIZE(entry->stats))
+				abort();
+
 			printf("counter\n%lu\n",
 			       entry->stats[oid_info->idx] & 0xffffffffu);
+			break;
+		}
 	}
+}
+
+static void print_metadata(char const *base_oid,
+			   struct oid_info const *oid_info,
+			   unsigned int idx,
+			   size_t num_cache_entries)
+{
+	printf("%s.%u.%u\n", base_oid, oid_info->oid, idx);
+
+	switch (idx) {
+	case 0:
+		printf("integer\n%zu\n", num_cache_entries);
+		break;
+
+	default:
+		assert(false);
+	}
+
 }
 
 int main(int argc, char *argv[])
@@ -614,7 +648,7 @@ int main(int argc, char *argv[])
 	struct cache_entry		*cache_entries;
 	size_t				num_cache_entries;
 	int				rc;
-	unsigned int			attr_idx = ~0u;
+	unsigned int			attr_idx = SNMPD_IDX_UNKNOWN;
 	size_t				req_cache_idx;
 	struct oid_info const		*sub_oid;
 	size_t				base_oid_len;
@@ -655,9 +689,12 @@ int main(int argc, char *argv[])
 	else if (!parse_oid(&argv[optind][base_oid_len], &sub_oid, &attr_idx))
 		;			/* noop */
 	else if ((opts.op_get || opts.op_set) &&
-		 (sub_oid == NULL || (attr_idx == ~0u && sub_oid != &SUB_OIDS[0])))
+		 (sub_oid == NULL || attr_idx == SNMPD_IDX_UNKNOWN ||
+		  (sub_oid->num_suboid && attr_idx >= sub_oid->num_suboid))) {
+		fprintf(stderr, "sub_oid=%p, idx=%u\n", sub_oid, attr_idx);
 		fputs("unknown OID\n", stderr);
-	else
+		return EX_UNAVAILABLE;
+	} else
 		is_ok = true;
 
 	if (!is_ok)
@@ -668,11 +705,12 @@ int main(int argc, char *argv[])
 		return EXIT_SUCCESS;
 	}
 
-	if (sub_oid == NULL) {
+	if (opts.op_get_next && sub_oid == NULL) {
 		sub_oid = &SUB_OIDS[0];
-		attr_idx = 0;
-	} else if (sub_oid == &SUB_OIDS[0])
-		attr_idx = ~0u;
+		assert(attr_idx == SNMPD_IDX_UNKNOWN);
+	}
+
+	assert(sub_oid != NULL);
 
 	cache_fd = open_cache_file(opts.conf_file, opts.cache_file, opts.cache_prog);
 	if (cache_fd < 0)
@@ -684,11 +722,13 @@ int main(int argc, char *argv[])
 
 	close(cache_fd);
 
-	req_cache_idx = num_cache_entries;
-	if (attr_idx == ~0u && opts.op_get_next)
-		req_cache_idx = 0;
-	if (sub_oid != &SUB_OIDS[0] && attr_idx != ~0u) {
+	if (sub_oid->num_suboid == 0) {
 		size_t				i;
+
+		if (attr_idx == SNMPD_IDX_UNKNOWN && opts.op_get_next)
+			req_cache_idx = 0;
+		else
+			req_cache_idx = num_cache_entries;
 
 		for (i = 0; i < num_cache_entries; ++i) {
 			if (cache_entries[i].idx != attr_idx)
@@ -706,16 +746,23 @@ int main(int argc, char *argv[])
 
 			break;
 		}
-	} else if (opts.op_get_next && attr_idx == ~0u) {
-		if (sub_oid == &SUB_OIDS[0])
+	} else if (opts.op_get_next) {
+		if (attr_idx == SNMPD_IDX_UNKNOWN)
+			req_cache_idx = 0;
+		else if (attr_idx + 1 != sub_oid->num_suboid)
+			req_cache_idx = attr_idx;
+		else {
+			req_cache_idx = 0;
 			++sub_oid;
+		}
+	} else
+		req_cache_idx = attr_idx;
 
-		req_cache_idx = 0;
-	}
+	assert(sub_oid->num_suboid == 0 || req_cache_idx < sub_oid->num_suboid);
 
-	if (sub_oid->idx == ~2u) {
-		printf("%s.%u\ninteger\n%zu\n", opts.base_oid, sub_oid->oid,
-		       num_cache_entries);
+	if (sub_oid->idx == SNMPD_OID_METADATA) {
+		print_metadata(opts.base_oid, sub_oid, req_cache_idx,
+			       num_cache_entries);
 	} else if (req_cache_idx < num_cache_entries && sub_oid->oid != 0) {
 		rc = read_sysfs_cache(&cache_entries[req_cache_idx]);
 		if (rc < 0)
