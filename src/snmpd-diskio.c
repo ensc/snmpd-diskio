@@ -90,8 +90,6 @@ static int create_cache_file(int conf_fd,
 			     char const *cache_prog,
 			     bool do_create)
 {
-	char	buf_cache_fd[sizeof(int)*3 + 2];
-	char	buf_conf_fd[sizeof(int)*3 + 2];
 	pid_t	pid;
 	int	status;
 	bool	cache_dirty = false;
@@ -120,16 +118,19 @@ static int create_cache_file(int conf_fd,
 		goto err;
 	}
 
-	sprintf(buf_cache_fd, "%u", cache_fd);
-	sprintf(buf_conf_fd, "%u", conf_fd);
-
 	cache_dirty = true;
-	pid = vfork();
+	pid = fork();
 	if (pid < 0) {
 		perror("fork()");
 		rc = -EX_OSERR;
 		goto err;
 	} else if (pid == 0) {
+		char	buf_cache_fd[sizeof(int)*3 + 2];
+		char	buf_conf_fd[sizeof(int)*3 + 2];
+
+		sprintf(buf_cache_fd, "%u", cache_fd);
+		sprintf(buf_conf_fd, "%u", conf_fd);
+
 		execl(cache_prog, cache_prog, buf_conf_fd, buf_cache_fd,
 		      (char const *)NULL);
 		_exit(EX_UNAVAILABLE);
