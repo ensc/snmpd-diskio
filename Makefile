@@ -17,7 +17,7 @@ CFLAGS = \
 	-Wall -W -Wno-unused-parameter \
 	-D_FORTIFY_SOURCE=2 -fstack-protector \
 	-O2 -g3
-AM_CFLAGS =		-std=gnu99
+AM_CFLAGS =		-std=gnu99 -Wno-missing-field-initializers
 
 AM_CPPFLAGS = \
 	-DVERSION=\"$(VERSION)\" \
