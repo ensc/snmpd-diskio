@@ -1,0 +1,23 @@
+env:
+  global:
+   # The next declaration is the encrypted COVERITY_SCAN_TOKEN, created
+   #   via the "travis encrypt" command using the project repo's public key
+   - secure: "v/bHqwWs2i9XS//gwt69tLZHyN1Nw0AjLy1mv1otDT3PcIQKmGcy+gcmM6hwc63IVxjXcwsR0iCQ4oZ4x/n2QltPXMIDbjam9Abq2SPt0qRiRSAvzX/SITUvrVkvCB3s/ccc10ta5Xb+hlw4hlnz3KIAMU1eHUWXEKBMTCYas9bO82VKPUwWCmlx14NbvhF8mNg/SUwI91ahGL2BSYRFmh0ZVVvKrKo2+nW3+9Z9ZOJR8PdThCufCMMxOPclKby44W4g5ss4tlIuw1IuKHSWKFtBMkoXkgGtzfrKAU7HaUBLQ4ka79/xrf0JlUFUO0M2YCGJukQQrQqgM8SZ5VOdsTjR0rCUXZSD3siX5x64WJZ1Bv5AKnTljEZB62X4c8iNxlKg5fhYWGnuOiPDue73EEzquTShXi6vs+5rNOTco0RxA/y/VIYy56D9oCuTJcJZ6+LpbxJ7CerD7/rMs28GPrsWuiinCkgxauqjjqTE/yPX03QSDAJTg/pu8TNYvxVnC1WBmMOICb7Z21fxoDwkFE+mV7AHHnN5FQ3gGI5wWC80KSd/3GbKdQiWyke7Tw08bAaVfe+n54zi3USrC9zwuxypFq2seMH0Um/SLSNqFV3VjuQB47o8TOFcFk4b11pSTcu5WNkIf24m6DVwEP2vEB8qppbExbspC3A+80TDje8="
+
+before_install:
+      - echo -n | openssl s_client -connect scan.coverity.com:443 | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' | sudo tee -a /etc/ssl/certs/ca-
+
+language: c
+
+addons:
+  coverity_scan:
+    project:
+      name: "ensc/snmpd-diskio"
+      description: "Build submitted via Travis CI"
+    notification_email: github@ensc.de
+    build_command_prepend: ":"
+    build_command:   "make -j"
+    branch_pattern: coverity_scan
+
+script:
+    - make
