@@ -70,13 +70,13 @@ struct cmdline_options {
 	unsigned int	op_get_next:1;
 };
 
-static void show_help(void)
+__attribute__((__noreturn__)) static void  show_help(void)
 {
 	puts("Usage: snmpd-diskio [--cache <cache-file>] [--get|-g] [--get-next|-n] <OID>]\n");
 	exit(0);
 }
 
-static void show_version(void)
+__attribute__((__noreturn__)) static void show_version(void)
 {
 	puts("snmpd-diskio " VERSION " -- diskio statistics\n\n"
 	     "Copyright (C) 2011 Enrico Scholz\n"
